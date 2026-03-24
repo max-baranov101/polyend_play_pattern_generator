@@ -444,8 +444,8 @@
       const MAX_BAR_CELLS = 64;
       const MAX_EXPORT_BARS = 4;
       const TEMPLATE_PATHS = {
-        beat: "examples/BeatFills/Acoustic%201.pattern",
-        melody: "examples/MelodyFills/Adventurer%201.pattern",
+        beat: new URL("./template-beat.bin", import.meta.url),
+        melody: new URL("./template-melody.bin", import.meta.url),
       };
       const AUDIO_LANE_BASE = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 1, 5: 2, 6: 2, 7: 2 };
       const MIDI_LANE_BASE = { 0: 8, 1: 9, 2: 10, 3: 10, 4: 9, 5: 10, 6: 10, 7: 10 };
@@ -667,13 +667,13 @@
           templateResourcesPromise = Promise.all([
             fetch(TEMPLATE_PATHS.beat).then((response) => {
               if (!response.ok) {
-                throw new Error("Failed to load beat template");
+                throw new Error("Failed to load built-in rhythm template");
               }
               return response.arrayBuffer();
             }),
             fetch(TEMPLATE_PATHS.melody).then((response) => {
               if (!response.ok) {
-                throw new Error("Failed to load melody template");
+                throw new Error("Failed to load built-in melody template");
               }
               return response.arrayBuffer();
             }),
