@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MIDI converter to Polyend Play .pattern files</title>
+    <style>
+      :root {
+        --bg: #f3efe8;
+        --paper: #fffaf3;
+        --line: #d8cab4;
+        --ink: #231d17;
+        --muted: #6f6456;
+        --accent: #a6542d;
+        --accent-strong: #844120;
+        --panel: #efe3cf;
+        --good: #356e3d;
+        --bar: #faf4ec;
+        --bar-active: #efc7ad;
+        --bar-selected: #a6542d;
+        --font-sans: "Avenir Next", sans-serif;
+        --font-serif: Georgia, serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        color: var(--ink);
+        background: linear-gradient(180deg, #f8f4ee 0%, var(--bg) 100%);
+      }
+
+      body.dragging main {
+        outline: 3px dashed var(--accent);
+        outline-offset: 10px;
+      }
+
+      main {
+        max-width: 1460px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .page-title {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.3;
+        margin-bottom: 18px;
+      }
+
+      .card,
+      .track-card,
+      .empty-state {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          linear-gradient(135deg, rgba(166, 84, 45, 0.06), transparent 40%),
+          rgba(255, 252, 247, 0.96);
+        box-shadow: 0 3px 10px rgba(69, 44, 21, 0.03);
+      }
+
+      .hero {
+        display: block;
+      }
+
+      .top-grid {
+        display: grid;
+        grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 1.2fr) 120px;
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .card {
+        min-height: 124px;
+        padding: 18px 20px;
+        display: grid;
+        align-content: start;
+        justify-items: start;
+        text-align: left;
+      }
+
+      .load-card {
+        cursor: pointer;
+      }
+
+      .load-card:hover {
+        border-color: var(--accent);
+      }
+
+      .load-card .card-title {
+        font-family: var(--font-sans);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .card-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      .card-subtitle {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .card-subtitle:empty {
+        display: none;
+      }
+
+      .howto-card {
+        padding-top: 16px;
+      }
+
+      .howto-list {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .howto-list li + li {
+        margin-top: 6px;
+      }
+
+      .bpm-value {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        line-height: 1;
+        font-weight: 700;
+      }
+
+      .tracks-stack {
+        display: grid;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .track-card {
+        padding: 14px 12px 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .track-top {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .track-info {
+        display: grid;
+        gap: 4px;
+        min-width: 260px;
+        flex: 1 1 280px;
+      }
+
+      .track-title-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .track-name {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .track-sub {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .track-kind {
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .track-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: start;
+        justify-content: flex-end;
+        margin-left: auto;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        min-width: 132px;
+      }
+
+      .field label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      input,
+      select,
+      button {
+        font: inherit;
+      }
+
+      .track-controls input,
+      .track-controls select {
+        width: 100%;
+        height: 56px;
+        min-height: 56px;
+        padding: 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #fffef9;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+
+      .track-controls select {
+        appearance: none;
+        -webkit-appearance: none;
+        padding-right: 42px;
+        background-image:
+          linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+          linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+        background-position:
+          calc(100% - 22px) calc(50% - 4px),
+          calc(100% - 16px) calc(50% - 4px);
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+      }
+
+      .track-controls button {
+        width: 100%;
+        height: 56px;
+        min-height: 56px;
+        padding: 8px 18px;
+        border: 1px solid var(--accent-strong);
+        border-radius: 20px;
+        background: var(--accent);
+        color: #fff9f1;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .track-controls button:hover:not(:disabled) {
+        background: var(--accent-strong);
+      }
+
+      .button-secondary {
+        border-color: var(--line);
+        background: #fff8ef;
+        color: var(--ink);
+      }
+
+      .bar-strip {
+        display: grid;
+        grid-template-columns: repeat(64, minmax(0, 1fr));
+        gap: 1px;
+        width: 100%;
+        padding-top: 4px;
+      }
+
+      .bar-cell {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        min-width: 0;
+        aspect-ratio: 1 / 1;
+        padding: 0;
+        border: 1px solid rgba(166, 84, 45, var(--bar-border-alpha, 0.34));
+        background: rgba(166, 84, 45, var(--bar-fill-alpha, 0));
+        cursor: pointer;
+        border-radius: 4px;
+        display: grid;
+        place-items: center;
+        font-size: clamp(7px, 0.55vw, 10px);
+        line-height: 1;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+        color: rgba(111, 100, 86, var(--bar-label-alpha, 0.32));
+      }
+
+      .bar-cell.active {
+        border-color: rgba(166, 84, 45, 0.62);
+      }
+
+      .bar-cell.selected {
+        border-color: var(--accent-strong);
+        box-shadow: inset 0 0 0 1px rgba(132, 65, 32, 0.45);
+      }
+
+      .bar-cell.outside {
+        opacity: 0.18;
+      }
+
+      .empty-state {
+        min-height: 120px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        text-align: center;
+        padding: 12px;
+      }
+
+      @media (max-width: 960px) {
+        .top-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 class="page-title">MIDI converter to Polyend Play .pattern files</h1>
+
+      <section class="hero">
+        <section class="top-grid">
+          <div id="load-card" class="card load-card" tabindex="0" role="button" aria-label="Load MIDI file">
+            <div>
+              <div id="load-title" class="card-title">Open or Drop a MIDI file</div>
+              <div id="load-subtitle" class="card-subtitle"></div>
+            </div>
+          </div>
+
+          <div class="card howto-card">
+            <div>
+              <div class="card-title">How to use</div>
+              <ul class="howto-list">
+                <li>Load a MIDI file</li>
+                <li>Click a square to hear one bar</li>
+                <li>Choose Start, Bars and melody Type before export</li>
+                <li>Melody mode `Bass` uses the dedicated bass lane</li>
+                <li>Melody mode `Chords` uses chord lanes only</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="card">
+            <div>
+              <div class="card-title">BPM</div>
+              <div id="bpm-value" class="bpm-value">-</div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="tracks-stack" class="tracks-stack">
+        <div class="empty-state">No MIDI loaded yet.</div>
+      </section>
+    </main>
+
+    <input id="file-input" type="file" accept=".mid,.midi" hidden>
+
+    <script type="module">
+      import { Midi } from "https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/+esm";
+      import * as Tone from "https://cdn.jsdelivr.net/npm/tone@15.0.4/+esm";
+
+      const MAX_BAR_CELLS = 64;
+      const MAX_EXPORT_BARS = 4;
+      const TEMPLATE_PATHS = {
+        beat: "examples/BeatFills/Acoustic%201.pattern",
+        melody: "examples/MelodyFills/Adventurer%201.pattern",
+      };
+      const AUDIO_LANE_BASE = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 1, 5: 2, 6: 2, 7: 2 };
+      const MIDI_LANE_BASE = { 0: 8, 1: 9, 2: 10, 3: 10, 4: 9, 5: 10, 6: 10, 7: 10 };
+      const BEAT_LANE_NOTES = { 0: 36, 1: 38, 2: 42, 3: 46, 4: 39, 5: 49, 6: 45, 7: 47 };
+      const ROLE_ORDER = ["kick", "snare", "closed_hat", "open_hat", "clap", "cymbal", "tom_perc", "other"];
+      const ROLE_TO_LANE = Object.fromEntries(ROLE_ORDER.map((role, index) => [role, index]));
+
+      const state = {
+        selectedFile: "",
+        midi: null,
+        tracks: [],
+        activeSynths: [],
+        playbackTimer: null,
+      };
+
+      let templateResourcesPromise = null;
+
+      const body = document.body;
+      const loadCard = document.getElementById("load-card");
+      const loadTitle = document.getElementById("load-title");
+      const loadSubtitle = document.getElementById("load-subtitle");
+      const bpmValueEl = document.getElementById("bpm-value");
+      const tracksStack = document.getElementById("tracks-stack");
+      const fileInput = document.getElementById("file-input");
+
+      function setStatus(message, ok = false) {
+        if (!state.selectedFile) {
+          loadSubtitle.textContent = ok ? "" : message;
+          return;
+        }
+        const base = `${state.tracks.length} playable tracks`;
+        if (!message || message === "Ready" || message.startsWith("Playing ")) {
+          loadSubtitle.textContent = base;
+          return;
+        }
+        loadSubtitle.textContent = `${base} · ${message}`;
+      }
+
+      function formatTrackName(track) {
+        if (track.name) {
+          return track.name;
+        }
+        if (track.isDrum) {
+          return `Drums ${String(track.index).padStart(2, "0")}`;
+        }
+        return `Track ${String(track.index).padStart(2, "0")}`;
+      }
+
+      function describeTempo(midi) {
+        const tempos = midi.header.tempos || [];
+        if (!tempos.length) {
+          return "120";
+        }
+        return String(Math.round(tempos[0].bpm));
+      }
+
+      function getEndBar(track) {
+        return Math.min(track.totalBars, track.startBar + track.barCount - 1);
+      }
+
+      function readVarint(bytes, pos) {
+        let shift = 0;
+        let value = 0;
+        while (pos < bytes.length) {
+          const byte = bytes[pos];
+          pos += 1;
+          value |= (byte & 0x7f) << shift;
+          if ((byte & 0x80) === 0) {
+            return [value, pos];
+          }
+          shift += 7;
+        }
+        throw new Error("Unexpected end of data while reading varint");
+      }
+
+      function writeVarint(value) {
+        const out = [];
+        let rest = value;
+        while (true) {
+          const byte = rest & 0x7f;
+          rest >>= 7;
+          if (rest) {
+            out.push(byte | 0x80);
+          } else {
+            out.push(byte);
+            return Uint8Array.from(out);
+          }
+        }
+      }
+
+      function concatBytes(chunks) {
+        const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const out = new Uint8Array(total);
+        let offset = 0;
+        chunks.forEach((chunk) => {
+          out.set(chunk, offset);
+          offset += chunk.length;
+        });
+        return out;
+      }
+
+      function decodeStepContent(content) {
+        if (!content.length || content[0] !== 0x0a) {
+          throw new Error("Unexpected step content header");
+        }
+        const [innerLen, pos] = readVarint(content, 1);
+        return {
+          inner: content.slice(pos, pos + innerLen),
+          tail: content.slice(pos + innerLen),
+        };
+      }
+
+      function parsePatternTemplate(bytes) {
+        let pos = 0;
+        const tracks = [];
+
+        while (pos < bytes.length - 5) {
+          if (bytes[pos] !== 0x0a) {
+            throw new Error(`Unexpected track tag at byte ${pos}`);
+          }
+          const [trackLen, payloadPos] = readVarint(bytes, pos + 1);
+          const payload = bytes.slice(payloadPos, payloadPos + trackLen);
+          let stepPos = 0;
+          const steps = [];
+
+          while (stepPos < payload.length && payload[stepPos] === 0x0a) {
+            const [stepLen, contentPos] = readVarint(payload, stepPos + 1);
+            const content = payload.slice(contentPos, contentPos + stepLen);
+            const { inner, tail } = decodeStepContent(content);
+            steps.push({ inner, tail, active: tail.length > 0 });
+            stepPos = contentPos + stepLen;
+          }
+
+          tracks.push({
+            steps,
+            attrs: payload.slice(stepPos),
+          });
+          pos = payloadPos + trackLen;
+        }
+
+        if (tracks.length !== 16) {
+          throw new Error(`Expected 16 tracks, got ${tracks.length}`);
+        }
+        return {
+          tracks,
+          footer: bytes.slice(pos),
+        };
+      }
+
+      function extractPrototypes(pattern) {
+        return pattern.tracks.map((track) => {
+          const empty = track.steps.find((step) => !step.active);
+          const active = track.steps.find((step) => step.active);
+          return {
+            emptyInner: empty ? empty.inner.slice() : new Uint8Array(44),
+            activeInner: active ? active.inner.slice() : null,
+            activeTail: active ? active.tail.slice() : new Uint8Array(),
+            attrs: track.attrs.slice(),
+          };
+        });
+      }
+
+      function setWord(inner, index, value) {
+        const next = inner.slice();
+        const offset = index * 2;
+        next[offset] = value & 0xff;
+        next[offset + 1] = (value >> 8) & 0xff;
+        return next;
+      }
+
+      function setNumSteps(attrs, numSteps) {
+        const next = attrs.slice();
+        if (!next.length || next[0] !== 0x10) {
+          throw new Error("Unexpected track attrs header");
+        }
+        next[1] = numSteps;
+        return next;
+      }
+
+      function encodeStep(inner, tail) {
+        const content = concatBytes([Uint8Array.of(0x0a), writeVarint(inner.length), inner, tail]);
+        return concatBytes([Uint8Array.of(0x0a), writeVarint(content.length), content]);
+      }
+
+      function wrapTrack(steps, attrs) {
+        const payload = concatBytes([...steps, attrs]);
+        return concatBytes([Uint8Array.of(0x0a), writeVarint(payload.length), payload]);
+      }
+
+      function cloneLanePrototype(prototypes, lane, midi) {
+        const trackIndex = lane + (midi ? 8 : 0);
+        const proto = prototypes[trackIndex];
+        if (proto.activeInner) {
+          return [proto, proto.activeInner.slice(), proto.activeTail.slice()];
+        }
+        const fallbackIndex = midi ? MIDI_LANE_BASE[lane] : AUDIO_LANE_BASE[lane];
+        const fallback = prototypes[fallbackIndex];
+        if (!fallback.activeInner) {
+          throw new Error(`No active prototype for drum lane ${lane}`);
+        }
+        return [proto, fallback.activeInner.slice(), fallback.activeTail.slice()];
+      }
+
+      function cloneMelodyPrototype(prototypes, lane, midi) {
+        const trackIndex = lane + (midi ? 8 : 0);
+        const proto = prototypes[trackIndex];
+        if (proto.activeInner) {
+          return [proto, proto.activeInner.slice(), proto.activeTail.slice()];
+        }
+        const fallback = prototypes[midi ? 8 : 0];
+        if (!fallback.activeInner) {
+          throw new Error(`No active prototype for melody lane ${lane}`);
+        }
+        return [proto, fallback.activeInner.slice(), fallback.activeTail.slice()];
+      }
+
+      async function ensureTemplateResources() {
+        if (!templateResourcesPromise) {
+          templateResourcesPromise = Promise.all([
+            fetch(TEMPLATE_PATHS.beat).then((response) => {
+              if (!response.ok) {
+                throw new Error("Failed to load beat template");
+              }
+              return response.arrayBuffer();
+            }),
+            fetch(TEMPLATE_PATHS.melody).then((response) => {
+              if (!response.ok) {
+                throw new Error("Failed to load melody template");
+              }
+              return response.arrayBuffer();
+            }),
+          ]).then(([beatBuffer, melodyBuffer]) => {
+            const beatTemplate = parsePatternTemplate(new Uint8Array(beatBuffer));
+            const melodyTemplate = parsePatternTemplate(new Uint8Array(melodyBuffer));
+            return {
+              beatTemplate,
+              melodyTemplate,
+              beatPrototypes: extractPrototypes(beatTemplate),
+              melodyPrototypes: extractPrototypes(melodyTemplate),
+            };
+          }).catch((error) => {
+            templateResourcesPromise = null;
+            throw error;
+          });
+        }
+        return templateResourcesPromise;
+      }
+
+      function gmRole(note) {
+        if ([24, 25, 27, 35, 36].includes(note)) return "kick";
+        if ([28, 31, 37, 38, 40].includes(note)) return "snare";
+        if ([42, 44, 54, 68].includes(note)) return "closed_hat";
+        if ([26, 46].includes(note)) return "open_hat";
+        if (note === 39) return "clap";
+        if ([49, 51, 52, 55, 57, 59].includes(note)) return "cymbal";
+        if ([41, 43, 45, 47, 48, 50, 53, 56, 58].includes(note)) return "tom_perc";
+        if (note < 35) return note % 2 ? "kick" : "snare";
+        return "other";
+      }
+
+      function signatureToMelodyTracks(signature, laneCount = 8) {
+        const trackSteps = Array.from({ length: laneCount }, () => Array(signature.length).fill(null));
+        const laneLastNote = Array(laneCount).fill(null);
+        const laneLastStep = Array(laneCount).fill(-999);
+
+        signature.forEach((stepNotes, stepIndex) => {
+          if (!stepNotes.length) {
+            return;
+          }
+          const available = Array.from({ length: laneCount }, (_, index) => index);
+          stepNotes.slice().sort((a, b) => a - b).slice(0, laneCount).forEach((note) => {
+            available.sort((left, right) => {
+              const leftMissing = laneLastNote[left] === null ? 1 : 0;
+              const rightMissing = laneLastNote[right] === null ? 1 : 0;
+              if (leftMissing !== rightMissing) return leftMissing - rightMissing;
+              const leftDistance = laneLastNote[left] === null ? 999 : Math.abs(laneLastNote[left] - note);
+              const rightDistance = laneLastNote[right] === null ? 999 : Math.abs(laneLastNote[right] - note);
+              if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+              const leftGap = Math.abs(laneLastStep[left] - stepIndex);
+              const rightGap = Math.abs(laneLastStep[right] - stepIndex);
+              if (leftGap !== rightGap) return leftGap - rightGap;
+              return left - right;
+            });
+            const lane = available.shift();
+            trackSteps[lane][stepIndex] = note;
+            laneLastNote[lane] = note;
+            laneLastStep[lane] = stepIndex;
+          });
+        });
+
+        return trackSteps;
+      }
+
+      function buildStepSignature(notes, startTick, ppq, numSteps) {
+        const signature = Array.from({ length: numSteps }, () => new Set());
+        notes.forEach((note) => {
+          const stepIndex = quantizeStep(note.ticks, startTick, ppq, numSteps);
+          signature[stepIndex].add(note.midi);
+        });
+        return signature.map((stepNotes) => [...stepNotes].sort((a, b) => a - b));
+      }
+
+      function buildBassTracks(signature) {
+        const trackSteps = Array.from({ length: 8 }, () => Array(signature.length).fill(null));
+        trackSteps[4] = signature.map((stepNotes) => (stepNotes.length ? stepNotes[0] : null));
+        return trackSteps;
+      }
+
+      function buildChordTracks(signature) {
+        const limited = signature.map((stepNotes) => stepNotes.slice(0, 4));
+        const voiced = signatureToMelodyTracks(limited, 4);
+        const trackSteps = Array.from({ length: 8 }, () => Array(signature.length).fill(null));
+        voiced.forEach((laneNotes, laneIndex) => {
+          trackSteps[laneIndex] = laneNotes.slice();
+        });
+        return trackSteps;
+      }
+
+      function quantizeStep(ticks, startTick, ppq, numSteps) {
+        const stepSize = ppq / 4;
+        return Math.max(0, Math.min(numSteps - 1, Math.round((ticks - startTick) / stepSize)));
+      }
+
+      function buildBeatStepLanes(notes, startTick, ppq, numSteps) {
+        const grid = Array.from({ length: numSteps }, () => new Set());
+        notes.forEach((note) => {
+          const stepIndex = quantizeStep(note.ticks, startTick, ppq, numSteps);
+          grid[stepIndex].add(ROLE_TO_LANE[gmRole(note.midi)]);
+        });
+        return grid.map((stepHits) => [...stepHits].sort((a, b) => a - b));
+      }
+
+      function buildMelodyTracks(notes, startTick, ppq, numSteps, melodyType) {
+        const signature = buildStepSignature(notes, startTick, ppq, numSteps);
+        if (melodyType === "chords") {
+          return buildChordTracks(signature);
+        }
+        return buildBassTracks(signature);
+      }
+
+      function renderBeatPattern(stepLanes, numSteps, resources) {
+        const blocks = [];
+        const usedLanes = new Set(stepLanes.flat());
+        for (let trackIndex = 0; trackIndex < 16; trackIndex += 1) {
+          const midi = trackIndex >= 8;
+          const lane = midi ? trackIndex - 8 : trackIndex;
+          const [proto, activeInnerProto, activeTail] = cloneLanePrototype(resources.beatPrototypes, lane, midi);
+          const steps = [];
+          for (let stepIndex = 0; stepIndex < 64; stepIndex += 1) {
+            const active = stepIndex < stepLanes.length && stepLanes[stepIndex].includes(lane);
+            if (active) {
+              let inner = activeInnerProto.slice();
+              if (midi) {
+                inner = setWord(inner, 6, BEAT_LANE_NOTES[lane]);
+              }
+              steps.push(encodeStep(inner, activeTail));
+            } else {
+              steps.push(encodeStep(proto.emptyInner, new Uint8Array()));
+            }
+          }
+          const attrs = setNumSteps(proto.attrs, usedLanes.has(lane) ? numSteps : 16);
+          blocks.push(wrapTrack(steps, attrs));
+        }
+        return concatBytes([...blocks, resources.beatTemplate.footer]);
+      }
+
+      function renderMelodyPattern(trackNoteSteps, numSteps, resources) {
+        const blocks = [];
+        const usedLanes = new Set(
+          trackNoteSteps
+            .slice(0, 8)
+            .map((notes, lane) => (notes.slice(0, numSteps).some((note) => note !== null) ? lane : null))
+            .filter((lane) => lane !== null)
+        );
+
+        for (let trackIndex = 0; trackIndex < 16; trackIndex += 1) {
+          const midi = trackIndex >= 8;
+          const lane = midi ? trackIndex - 8 : trackIndex;
+          const [proto, activeInnerProto, activeTail] = cloneMelodyPrototype(resources.melodyPrototypes, lane, midi);
+          const notes = trackNoteSteps[lane] || [];
+          const steps = [];
+          for (let stepIndex = 0; stepIndex < 64; stepIndex += 1) {
+            const note = stepIndex < notes.length ? notes[stepIndex] : null;
+            if (note === null || note === undefined) {
+              steps.push(encodeStep(proto.emptyInner, new Uint8Array()));
+            } else {
+              const inner = setWord(activeInnerProto, 6, note);
+              steps.push(encodeStep(inner, activeTail));
+            }
+          }
+          const attrs = setNumSteps(proto.attrs, usedLanes.has(lane) ? numSteps : 16);
+          blocks.push(wrapTrack(steps, attrs));
+        }
+        return concatBytes([...blocks, resources.melodyTemplate.footer]);
+      }
+
+      function downloadPattern(bytes, fileName) {
+        const blob = new Blob([bytes], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      async function exportTrackPattern(rowIndex) {
+        const trackMeta = state.tracks[rowIndex];
+        const track = state.midi?.tracks?.[trackMeta.index];
+        if (!track || !track.notes.length) {
+          return;
+        }
+
+        const numSteps = trackMeta.barCount * 16;
+        if (numSteps > 64) {
+          setStatus("Polyend Play pattern export is limited to 4 bars.", false);
+          return;
+        }
+
+        const ppq = state.midi.header.ppq;
+        const startTick = (trackMeta.startBar - 1) * ppq * 4;
+        const endTick = getEndBar(trackMeta) * ppq * 4;
+        const segmentNotes = track.notes.filter((note) => note.ticks >= startTick && note.ticks < endTick);
+        if (!segmentNotes.length) {
+          setStatus("Nothing to export in the selected bars.", false);
+          return;
+        }
+
+        setStatus("Exporting .pattern...", true);
+        try {
+          const resources = await ensureTemplateResources();
+          const stem = state.selectedFile.replace(/\.[^.]+$/, "");
+          const trackId = `t${String(trackMeta.index).padStart(2, "0")}`;
+          const startId = `s${String(trackMeta.startBar).padStart(2, "0")}`;
+          const barsId = `${trackMeta.barCount}bars`;
+
+          if (trackMeta.isDrum) {
+            const stepLanes = buildBeatStepLanes(segmentNotes, startTick, ppq, numSteps);
+            const bytes = renderBeatPattern(stepLanes, numSteps, resources);
+            const fileName = `${stem}_${trackId}_drums_${startId}_${barsId}.pattern`;
+            downloadPattern(bytes, fileName);
+            setStatus(`Exported ${fileName}`, true);
+            return;
+          }
+
+          const trackNoteSteps = buildMelodyTracks(segmentNotes, startTick, ppq, numSteps, trackMeta.melodyType || "bass");
+          const bytes = renderMelodyPattern(trackNoteSteps, numSteps, resources);
+          const fileName = `${stem}_${trackId}_${trackMeta.melodyType || "bass"}_${startId}_${barsId}.pattern`;
+          downloadPattern(bytes, fileName);
+          setStatus(`Exported ${fileName}`, true);
+        } catch (error) {
+          console.error(error);
+          setStatus(error.message || "Failed to export .pattern.", false);
+        }
+      }
+
+      function buildTrackModels(midi) {
+        const ppq = midi.header.ppq;
+        return midi.tracks
+          .map((track, index) => {
+            const notes = track.notes || [];
+            if (!notes.length) {
+              return null;
+            }
+
+            const maxTick = Math.max(...notes.map((note) => note.ticks + note.durationTicks));
+            const totalBars = Math.max(1, Math.ceil(maxTick / (ppq * 4)));
+            const firstTick = Math.min(...notes.map((note) => note.ticks));
+            const firstBar = Math.max(1, Math.floor(firstTick / (ppq * 4)) + 1);
+            const isDrum = track.channel === 9 || Boolean(track.instrument?.percussion);
+
+            const bars = Array.from({ length: totalBars }, (_, idx) => {
+              const barIndex = idx + 1;
+              const startTick = idx * ppq * 4;
+              const endTick = startTick + ppq * 4;
+              const noteCount = notes.filter((note) => note.ticks >= startTick && note.ticks < endTick).length;
+              return { index: barIndex, noteCount, hasNotes: noteCount > 0, playable: true };
+            });
+
+            const maxBarNoteCount = Math.max(...bars.map((bar) => bar.noteCount), 1);
+            bars.forEach((bar) => {
+              const density = bar.noteCount ? Math.sqrt(bar.noteCount / maxBarNoteCount) : 0;
+              bar.fillAlpha = density ? (0.18 + density * 0.56).toFixed(3) : "0";
+              bar.labelAlpha = density ? (0.58 + density * 0.28).toFixed(3) : "0.22";
+              bar.borderAlpha = density ? (0.34 + density * 0.28).toFixed(3) : "0.28";
+            });
+
+            return {
+              index,
+              name: formatTrackName({ ...track, index, isDrum }),
+              isDrum,
+              melodyType: isDrum ? null : "bass",
+              noteCount: notes.length,
+              totalBars,
+              firstBar,
+              startBar: firstBar,
+              barCount: Math.min(MAX_EXPORT_BARS, totalBars - firstBar + 1),
+              channel: track.channel,
+              program: track.instrument?.number ?? 0,
+              instrumentName: track.instrument?.name || "",
+              bars,
+            };
+          })
+          .filter(Boolean);
+      }
+
+      function stopPlayback() {
+        if (state.playbackTimer) {
+          window.clearTimeout(state.playbackTimer);
+          state.playbackTimer = null;
+        }
+        state.activeSynths.forEach((synth) => synth.dispose());
+        state.activeSynths = [];
+      }
+
+      async function playTrackSegment(rowIndex, startBar, endBar) {
+        const trackMeta = state.tracks[rowIndex];
+        const track = state.midi?.tracks?.[trackMeta.index];
+        if (!track || !track.notes.length) {
+          return;
+        }
+
+        await Tone.start();
+        stopPlayback();
+
+        const ppq = state.midi.header.ppq;
+        const startTick = (startBar - 1) * ppq * 4;
+        const endTick = endBar * ppq * 4;
+        const startSeconds = state.midi.header.ticksToSeconds(startTick);
+        const previewNotes = track.notes.filter((note) => note.ticks < endTick && note.ticks + note.durationTicks > startTick);
+
+        if (!previewNotes.length) {
+          setStatus(`No notes in ${trackMeta.name}, bar ${startBar}.`, false);
+          return;
+        }
+
+        const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+        synth.set(
+          trackMeta.isDrum
+            ? {
+                oscillator: { type: "square4" },
+                envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.08 },
+              }
+            : {
+                oscillator: { type: "sawtooth6" },
+                envelope: { attack: 0.01, decay: 0.15, sustain: 0.25, release: 0.2 },
+              }
+        );
+        state.activeSynths = [synth];
+
+        const now = Tone.now() + 0.05;
+        let previewLength = 0;
+        previewNotes.forEach((note) => {
+          const noteStartSeconds = state.midi.header.ticksToSeconds(note.ticks);
+          const noteEndSeconds = state.midi.header.ticksToSeconds(Math.min(note.ticks + note.durationTicks, endTick));
+          const relativeStart = Math.max(0, noteStartSeconds - startSeconds);
+          const duration = Math.max(0.05, noteEndSeconds - Math.max(noteStartSeconds, startSeconds));
+          previewLength = Math.max(previewLength, relativeStart + duration);
+          synth.triggerAttackRelease(Tone.Frequency(note.midi, "midi").toFrequency(), duration, now + relativeStart, note.velocity || 0.8);
+        });
+
+        const label = startBar === endBar ? `bar ${startBar}` : `bars ${startBar}-${endBar}`;
+        setStatus(`Playing ${label}`, true);
+        state.playbackTimer = window.setTimeout(() => {
+          setStatus("Ready", true);
+          stopPlayback();
+        }, (previewLength + 0.25) * 1000);
+      }
+
+      function renderTracks() {
+        tracksStack.innerHTML = "";
+
+        if (!state.tracks.length) {
+          tracksStack.innerHTML = '<div class="empty-state">No MIDI loaded yet.</div>';
+          return;
+        }
+
+        state.tracks.forEach((track, rowIndex) => {
+          const card = document.createElement("article");
+          card.className = "track-card";
+
+          const barButtons = track.bars.map((bar) => {
+            const classes = ["bar-cell"];
+            if (bar.hasNotes) {
+              classes.push("active");
+            }
+            if (bar.index >= track.startBar && bar.index <= getEndBar(track)) {
+              classes.push("selected");
+            }
+            if (!bar.playable) {
+              classes.push("outside");
+            }
+            return `
+              <button
+                type="button"
+                class="${classes.join(" ")}"
+                data-action="play-bar"
+                data-row="${rowIndex}"
+                data-bar="${bar.index}"
+                style="--bar-fill-alpha:${bar.fillAlpha}; --bar-label-alpha:${bar.labelAlpha}; --bar-border-alpha:${bar.borderAlpha};"
+                title="${bar.playable ? `Play ${track.name}, bar ${bar.index}` : `Outside track length`}"
+                ${bar.playable ? "" : "disabled"}
+              >${bar.index}</button>
+            `;
+          }).join("");
+
+          card.innerHTML = `
+            <div class="track-top">
+              <div class="track-info">
+                <div class="track-title-row">
+                  <div class="track-name">${track.name}</div>
+                  <div class="track-kind">${track.isDrum ? "beat" : "melody"}</div>
+                </div>
+                <div class="track-sub">ch ${track.channel} · prog ${String(track.program).padStart(3, "0")} · ${track.instrumentName || "unknown instrument"} · bars ${track.totalBars}</div>
+              </div>
+
+              <div class="track-controls">
+                <div class="field">
+                  <label for="start-${rowIndex}">Start</label>
+                  <input id="start-${rowIndex}" type="number" min="1" max="${track.totalBars}" value="${track.startBar}" data-action="start-bar" data-row="${rowIndex}">
+                </div>
+                <div class="field">
+                  <label for="bars-${rowIndex}">Bars</label>
+                  <input id="bars-${rowIndex}" type="number" min="1" max="${Math.min(MAX_EXPORT_BARS, track.totalBars - track.startBar + 1)}" value="${track.barCount}" data-action="bar-count" data-row="${rowIndex}">
+                </div>
+                ${track.isDrum ? "" : `
+                <div class="field">
+                  <label for="type-${rowIndex}">Type</label>
+                  <select id="type-${rowIndex}" data-action="melody-type" data-row="${rowIndex}">
+                    <option value="bass"${track.melodyType === "bass" ? " selected" : ""}>Bass</option>
+                    <option value="chords"${track.melodyType === "chords" ? " selected" : ""}>Chords</option>
+                  </select>
+                </div>
+                `}
+                <div class="field">
+                  <label>Export</label>
+                  <button type="button" class="button-secondary" data-action="export-pattern" data-row="${rowIndex}">Export</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bar-strip">${barButtons}</div>
+          `;
+
+          tracksStack.appendChild(card);
+        });
+      }
+
+      async function loadMidiFromFile(file) {
+        if (!file) {
+          return;
+        }
+        if (!/\.mid(i)?$/i.test(file.name)) {
+          setStatus("Please drop a .mid or .midi file.", false);
+          return;
+        }
+
+        setStatus(`Loading ${file.name}...`);
+        stopPlayback();
+
+        try {
+          const buffer = await file.arrayBuffer();
+          const midi = new Midi(buffer);
+          state.selectedFile = file.name;
+          state.midi = midi;
+          state.tracks = buildTrackModels(midi);
+          bpmValueEl.textContent = describeTempo(midi);
+          loadTitle.textContent = file.name;
+          loadSubtitle.textContent = `${state.tracks.length} playable tracks`;
+          renderTracks();
+          setStatus("Ready", true);
+        } catch (error) {
+          console.error(error);
+          state.selectedFile = "";
+          state.midi = null;
+          state.tracks = [];
+          bpmValueEl.textContent = "-";
+          loadTitle.textContent = "Open or Drop a MIDI file anywhere on the page";
+          loadSubtitle.textContent = "";
+          renderTracks();
+          setStatus("Failed to parse MIDI file.", false);
+        }
+      }
+
+      function preventDropDefaults(event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        body.addEventListener(eventName, preventDropDefaults);
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        body.addEventListener(eventName, () => body.classList.add("dragging"));
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        body.addEventListener(eventName, () => body.classList.remove("dragging"));
+      });
+
+      body.addEventListener("drop", async (event) => {
+        const [file] = [...(event.dataTransfer?.files || [])];
+        await loadMidiFromFile(file);
+      });
+
+      loadCard.addEventListener("click", () => fileInput.click());
+      loadCard.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          fileInput.click();
+        }
+      });
+
+      fileInput.addEventListener("change", async (event) => {
+        const [file] = [...(event.target.files || [])];
+        await loadMidiFromFile(file);
+        event.target.value = "";
+      });
+
+      tracksStack.addEventListener("change", (event) => {
+        const target = event.target;
+        const rowIndex = Number(target.dataset.row);
+        const action = target.dataset.action;
+        const track = state.tracks[rowIndex];
+        if (!track) {
+          return;
+        }
+
+        if (action === "start-bar") {
+          const value = Math.max(1, Math.min(track.totalBars, Number(target.value) || 1));
+          track.startBar = value;
+          track.barCount = Math.min(track.barCount, MAX_EXPORT_BARS, track.totalBars - track.startBar + 1);
+          window.setTimeout(renderTracks, 0);
+          return;
+        }
+
+        if (action === "bar-count") {
+          const maxBars = Math.max(1, Math.min(MAX_EXPORT_BARS, track.totalBars - track.startBar + 1));
+          const value = Math.max(1, Math.min(maxBars, Number(target.value) || 1));
+          track.barCount = value;
+          window.setTimeout(renderTracks, 0);
+          return;
+        }
+
+        if (action === "melody-type") {
+          track.melodyType = target.value === "chords" ? "chords" : "bass";
+          window.setTimeout(renderTracks, 0);
+        }
+      });
+
+      tracksStack.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-action]");
+        if (!button) {
+          return;
+        }
+        const rowIndex = Number(button.dataset.row);
+        const action = button.dataset.action;
+        if (action === "export-pattern") {
+          await exportTrackPattern(rowIndex);
+        }
+        if (action === "play-bar") {
+          const bar = Number(button.dataset.bar);
+          const track = state.tracks[rowIndex];
+          track.startBar = bar;
+          track.barCount = Math.min(MAX_EXPORT_BARS, track.totalBars - track.startBar + 1);
+          renderTracks();
+          await playTrackSegment(rowIndex, bar, getEndBar(track));
+        }
+      });
+
+      renderTracks();
+    </script>
+  </body>
+</html>
