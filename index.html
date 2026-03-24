@@ -439,8 +439,6 @@
 
     <script type="module">
       import { Midi } from "https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/+esm";
-      import * as Tone from "https://cdn.jsdelivr.net/npm/tone@15.0.4/+esm";
-
       const MAX_BAR_CELLS = 64;
       const MAX_EXPORT_BARS = 4;
       const TEMPLATE_PATHS = {
@@ -457,8 +455,10 @@
         selectedFile: "",
         midi: null,
         tracks: [],
-        activeSynths: [],
+        audioContext: null,
+        activePreviewNodes: [],
         playbackTimer: null,
+        audioUnlocked: false,
       };
 
       let templateResourcesPromise = null;
@@ -470,6 +470,32 @@
       const bpmValueEl = document.getElementById("bpm-value");
       const tracksStack = document.getElementById("tracks-stack");
       const fileInput = document.getElementById("file-input");
+
+      function getAudioContext() {
+        if (!state.audioContext) {
+          const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+          state.audioContext = new AudioContextCtor({ latencyHint: "interactive" });
+        }
+        return state.audioContext;
+      }
+
+      function midiToFrequency(note) {
+        return 440 * (2 ** ((note - 69) / 12));
+      }
+
+      async function ensureAudioReady() {
+        try {
+          const audioContext = getAudioContext();
+          if (audioContext.state !== "running") {
+            await audioContext.resume();
+          }
+          state.audioUnlocked = audioContext.state === "running";
+          return state.audioUnlocked;
+        } catch (error) {
+          console.warn("Audio preview is still locked.", error);
+          return false;
+        }
+      }
 
       function setStatus(message, ok = false) {
         if (!state.selectedFile) {
@@ -959,8 +985,14 @@
           window.clearTimeout(state.playbackTimer);
           state.playbackTimer = null;
         }
-        state.activeSynths.forEach((synth) => synth.dispose());
-        state.activeSynths = [];
+        state.activePreviewNodes.forEach(({ oscillator, gain }) => {
+          try {
+            oscillator.stop();
+          } catch {}
+          oscillator.disconnect();
+          gain.disconnect();
+        });
+        state.activePreviewNodes = [];
       }
 
       async function playTrackSegment(rowIndex, startBar, endBar) {
@@ -970,7 +1002,11 @@
           return;
         }
 
-        await Tone.start();
+        const audioReady = await ensureAudioReady();
+        if (!audioReady) {
+          setStatus("Click once more to enable audio preview.", false);
+          return;
+        }
         stopPlayback();
 
         const ppq = state.midi.header.ppq;
@@ -984,29 +1020,44 @@
           return;
         }
 
-        const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-        synth.set(
-          trackMeta.isDrum
-            ? {
-                oscillator: { type: "square4" },
-                envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.08 },
-              }
-            : {
-                oscillator: { type: "sawtooth6" },
-                envelope: { attack: 0.01, decay: 0.15, sustain: 0.25, release: 0.2 },
-              }
-        );
-        state.activeSynths = [synth];
-
-        const now = Tone.now() + 0.05;
+        const audioContext = getAudioContext();
+        const now = audioContext.currentTime + 0.05;
         let previewLength = 0;
         previewNotes.forEach((note) => {
           const noteStartSeconds = state.midi.header.ticksToSeconds(note.ticks);
           const noteEndSeconds = state.midi.header.ticksToSeconds(Math.min(note.ticks + note.durationTicks, endTick));
           const relativeStart = Math.max(0, noteStartSeconds - startSeconds);
-          const duration = Math.max(0.05, noteEndSeconds - Math.max(noteStartSeconds, startSeconds));
-          previewLength = Math.max(previewLength, relativeStart + duration);
-          synth.triggerAttackRelease(Tone.Frequency(note.midi, "midi").toFrequency(), duration, now + relativeStart, note.velocity || 0.8);
+          const duration = Math.max(0.06, noteEndSeconds - Math.max(noteStartSeconds, startSeconds));
+          const startedAt = now + relativeStart;
+          const endedAt = startedAt + duration;
+          const releaseAt = endedAt + (trackMeta.isDrum ? 0.05 : 0.12);
+          const velocity = Math.max(0.08, Math.min(1, note.velocity || 0.8));
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+
+          oscillator.type = trackMeta.isDrum ? "square" : "sawtooth";
+          oscillator.frequency.setValueAtTime(midiToFrequency(note.midi), startedAt);
+          gain.gain.setValueAtTime(0.0001, startedAt);
+
+          if (trackMeta.isDrum) {
+            gain.gain.exponentialRampToValueAtTime(0.12 * velocity, startedAt + 0.003);
+            gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+          } else {
+            gain.gain.linearRampToValueAtTime(0.16 * velocity, startedAt + 0.01);
+            gain.gain.linearRampToValueAtTime(0.09 * velocity, Math.max(startedAt + 0.03, endedAt - 0.04));
+            gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt);
+          }
+
+          oscillator.connect(gain);
+          gain.connect(audioContext.destination);
+          oscillator.start(startedAt);
+          oscillator.stop(releaseAt);
+          oscillator.onended = () => {
+            oscillator.disconnect();
+            gain.disconnect();
+          };
+          state.activePreviewNodes.push({ oscillator, gain });
+          previewLength = Math.max(previewLength, relativeStart + duration + (trackMeta.isDrum ? 0.05 : 0.12));
         });
 
         const label = startBar === endBar ? `bar ${startBar}` : `bars ${startBar}-${endBar}`;
@@ -1139,6 +1190,16 @@
 
       ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
         body.addEventListener(eventName, preventDropDefaults);
+      });
+
+      body.addEventListener("pointerdown", () => {
+        void ensureAudioReady();
+      }, { passive: true });
+
+      body.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          void ensureAudioReady();
+        }
       });
 
       ["dragenter", "dragover"].forEach((eventName) => {
