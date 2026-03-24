@@ -76,18 +76,22 @@
 
       .top-grid {
         display: grid;
-        grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 1.2fr) 120px;
+        grid-template-columns: minmax(260px, 1.05fr) minmax(320px, 1.1fr) minmax(150px, 0.5fr) minmax(260px, 0.95fr);
         gap: 18px;
         align-items: stretch;
       }
 
       .card {
-        min-height: 124px;
-        padding: 18px 20px;
+        min-height: 188px;
+        padding: 24px 24px;
         display: grid;
         align-content: start;
         justify-items: start;
         text-align: left;
+      }
+
+      .card > div {
+        width: 100%;
       }
 
       .load-card {
@@ -99,32 +103,35 @@
       }
 
       .load-card .card-title {
-        font-family: var(--font-sans);
-        font-size: 18px;
-        font-weight: 600;
-        line-height: 1.4;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.2;
+        min-height: 2.4em;
+        overflow-wrap: anywhere;
       }
 
       .card-title {
         font-family: var(--font-serif);
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 700;
         line-height: 1.2;
       }
 
       .card-subtitle {
         margin-top: 8px;
-        font-size: 12px;
+        min-height: 1.45em;
+        font-size: 14px;
         line-height: 1.45;
         color: var(--muted);
       }
 
       .card-subtitle:empty {
-        display: none;
+        visibility: hidden;
       }
 
       .howto-card {
-        padding-top: 16px;
+        padding-top: 24px;
       }
 
       .howto-list {
@@ -141,9 +148,42 @@
 
       .bpm-value {
         font-family: var(--font-serif);
-        font-size: 30px;
+        font-size: 42px;
         line-height: 1;
         font-weight: 700;
+      }
+
+      .support-card {
+        align-content: stretch;
+        justify-items: start;
+        text-align: left;
+      }
+
+      .support-card > div {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .support-copy {
+        margin-top: 16px;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .support-widget {
+        margin-top: 12px;
+      }
+
+      .support-link {
+        color: var(--accent-strong);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .support-link:hover {
+        text-decoration: underline;
       }
 
       .tracks-stack {
@@ -356,8 +396,8 @@
                 <li>Load a MIDI file</li>
                 <li>Click a square to hear one bar</li>
                 <li>Choose Start, Bars and melody Type before export</li>
-                <li>Melody mode `Bass` uses the dedicated bass lane</li>
-                <li>Melody mode `Chords` uses chord lanes only</li>
+                <li>Melody mode `Bass` is general</li>
+                <li>Melody mode `Chords` — Work in Progress</li>
               </ul>
             </div>
           </div>
@@ -366,6 +406,25 @@
             <div>
               <div class="card-title">BPM</div>
               <div id="bpm-value" class="bpm-value">-</div>
+            </div>
+          </div>
+
+          <div class="card support-card">
+            <div>
+              <div class="card-title">Press F to pay respect</div>
+              <div class="support-widget">
+                <script type="text/javascript" src="https://storage.ko-fi.com/cdn/widget/Widget_2.js"></script>
+                <script type="text/javascript">
+                  kofiwidget2.init("Support me on Ko-fi", "#72a4f2", "D1D81WKO47");
+                  kofiwidget2.draw();
+                </script>
+              </div>
+              <div class="support-copy">
+                Or you can follow my Telegram channel
+                <a class="support-link" href="https://t.me/information_esthetique" target="_blank" rel="noreferrer">Information Esthetique</a>.<br />
+                It's about data visualization and infographics.<br />
+                I would be happy!
+              </div>
             </div>
           </div>
         </section>
